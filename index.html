@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RAGify — Semantic Vector Engine</title>
+<meta name="description" content="Vector database with HNSW, KD-Tree, and RAG pipeline powered by local AI">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0e14;
+  --surface: #131720;
+  --surface2: #1a2030;
+  --border: #1e2533;
+  --border-light: #2a3348;
+  --gold: #e8a136;
+  --gold-dim: rgba(232,161,54,.15);
+  --gold-glow: rgba(232,161,54,.25);
+  --blue: #3b82f6;
+  --cs: #06b6d4;
+  --math: #a78bfa;
+  --food: #f97316;
+  --sports: #22c55e;
+  --doc: #fb7185;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --muted: #64748b;
+  --dim: #475569;
+  --danger: #ef4444;
+  --success: #22c55e;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ━━ TOPBAR ━━ */
+.topbar{display:flex;align-items:center;padding:0 28px;height:56px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;gap:16px}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,var(--gold),#d97706);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#0b0e14;letter-spacing:-1px}
+.logo-text{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-.5px}
+.logo-text span{color:var(--gold)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.pill{font-size:11px;padding:4px 12px;border-radius:20px;font-weight:500;letter-spacing:.3px;border:1px solid var(--border)}
+.pill-ok{color:var(--success);border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.08)}
+.pill-err{color:var(--danger);border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08)}
+.pill-info{color:var(--text2);border-color:var(--border)}
+#statsLabel{font-size:12px;color:var(--muted);font-weight:400}
+
+/* ━━ NAV TABS ━━ */
+.nav{display:flex;align-items:center;justify-content:center;padding:12px 28px;gap:6px;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.nav-btn{padding:8px 22px;border-radius:24px;border:1px solid transparent;background:transparent;color:var(--muted);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:all .25s;letter-spacing:.2px}
+.nav-btn:hover{color:var(--text2);background:var(--surface)}
+.nav-btn.active{background:var(--gold-dim);color:var(--gold);border-color:rgba(232,161,54,.25);box-shadow:0 0 20px rgba(232,161,54,.08)}
+
+/* ━━ MAIN ━━ */
+.main{flex:1;overflow:hidden;position:relative}
+.page{display:none;height:100%;overflow-y:auto}
+.page.active{display:block}
+
+/* ━━ SEARCH PAGE ━━ */
+.search-bar{display:flex;gap:10px;padding:20px 28px;align-items:center;flex-wrap:wrap}
+.search-input-wrap{flex:1;min-width:200px;position:relative}
+.search-input-wrap svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.search-input{width:100%;padding:11px 14px 11px 42px;background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:all .2s}
+.search-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-dim)}
+.search-input::placeholder{color:var(--dim)}
+.algo-pills{display:flex;gap:4px}
+.ap{padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s}
+.ap:hover{border-color:var(--border-light);color:var(--text2)}
+.ap.on{background:var(--gold-dim);color:var(--gold);border-color:rgba(232,161,54,.3)}
+.ctrl-group{display:flex;align-items:center;gap:8px}
+.ctrl-select{padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:inherit;font-size:12px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none}
+.ctrl-select option{background:var(--surface)}
+.ctrl-label{font-size:12px;color:var(--muted);white-space:nowrap;font-weight:500}
+.search-btn{padding:10px 24px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--gold),#d97706);color:#0b0e14;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;letter-spacing:.3px}
+.search-btn:hover{box-shadow:0 4px 24px var(--gold-glow);transform:translateY(-1px)}
+.search-content{display:flex;gap:20px;padding:0 28px 24px;height:calc(100% - 84px);min-height:0}
+.plot-card{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.plot-card canvas{flex:1;display:block;width:100%;height:100%}
+.side-col{width:360px;flex-shrink:0;display:flex;flex-direction:column;gap:16px;overflow-y:auto;padding-right:4px}
+
+/* ━━ CARDS ━━ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;transition:border-color .2s}
+.card:hover{border-color:var(--border-light)}
+.card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-title::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--gold);flex-shrink:0}
+
+/* ━━ LATENCY ━━ */
+.lat-value{font-size:36px;font-weight:700;color:var(--gold);letter-spacing:-1px;line-height:1}
+.lat-detail{font-size:12px;color:var(--muted);margin-top:6px}
+
+/* ━━ RESULT ITEMS ━━ */
+.r-list{display:flex;flex-direction:column;gap:8px}
+.r-item{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;transition:all .2s;animation:slideIn .3s ease}
+@keyframes slideIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+.r-item:hover{border-color:var(--border-light);background:var(--surface2)}
+.r-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.r-rank{font-size:10px;font-weight:600;color:var(--dim);letter-spacing:1px}
+.r-dist{font-size:11px;color:var(--muted)}
+.r-meta{font-size:13px;line-height:1.5;margin-bottom:8px}
+.r-foot{display:flex;align-items:center;gap:8px}
+.r-tag{font-size:10px;padding:3px 10px;border-radius:8px;font-weight:600;letter-spacing:.3px}
+.r-del{margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid rgba(239,68,68,.2);background:rgba(239,68,68,.06);color:var(--danger);font-family:inherit;font-size:11px;cursor:pointer;transition:all .2s;width:auto}
+.r-del:hover{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.35)}
+
+/* ━━ BENCH ━━ */
+.bench-row{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.bench-label{display:flex;justify-content:space-between;font-size:12px;font-weight:500}
+.bench-track{height:6px;background:var(--bg);border-radius:6px;overflow:hidden}
+.bench-fill{height:100%;border-radius:6px;transition:width .5s cubic-bezier(.22,1,.36,1)}
+
+/* ━━ HNSW LAYERS ━━ */
+.layer-row{display:flex;align-items:center;gap:10px;font-size:12px;margin-bottom:6px}
+.layer-num{width:24px;text-align:right;font-weight:600;color:var(--gold);font-size:11px}
+.layer-track{flex:1;height:4px;background:var(--bg);border-radius:4px;overflow:hidden}
+.layer-fill{height:100%;background:linear-gradient(90deg,var(--gold),#f59e0b);border-radius:4px;transition:width .4s ease}
+.layer-info{font-size:11px;color:var(--muted);width:80px;text-align:right}
+
+/* ━━ VECTOR BAR CHART ━━ */
+#vecCvs{display:block;width:100%;border-radius:8px;background:var(--bg)}
+
+/* ━━ INSERT SECTION (LEFT PANEL) ━━ */
+.insert-group{display:flex;flex-direction:column;gap:8px}
+.insert-group input,.insert-group select{padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:13px;outline:none;transition:border-color .2s}
+.insert-group input:focus,.insert-group select:focus{border-color:var(--gold)}
+.insert-group input::placeholder{color:var(--dim)}
+.insert-group select option{background:var(--surface)}
+.btn-outline{padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text2);font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;width:100%}
+.btn-outline:hover{border-color:var(--border-light);background:var(--surface2);color:var(--text)}
+
+/* ━━ LEGEND ━━ */
+.legend-grid{display:flex;flex-direction:column;gap:6px}
+.leg-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* ━━ DOCUMENTS PAGE ━━ */
+.docs-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:24px 28px;height:100%;overflow-y:auto}
+.docs-col{display:flex;flex-direction:column;gap:16px;min-height:0}
+textarea{width:100%;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical;min-height:140px;line-height:1.6;transition:border-color .2s}
+textarea:focus{border-color:var(--gold)}
+textarea::placeholder{color:var(--dim)}
+.btn-gold{padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--gold),#d97706);color:#0b0e14;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;width:100%}
+.btn-gold:hover{box-shadow:0 4px 24px var(--gold-glow);transform:translateY(-1px)}
+.btn-gold:disabled{opacity:.5;transform:none;cursor:wait}
+.status-text{font-size:12px;color:var(--muted)}
+.doc-item{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;animation:slideIn .3s ease;transition:border-color .2s}
+.doc-item:hover{border-color:var(--border-light)}
+.doc-title{font-size:13px;font-weight:600;color:var(--success);margin-bottom:4px}
+.doc-preview{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:8px}
+.doc-foot{display:flex;align-items:center;justify-content:space-between}
+.doc-words{font-size:11px;color:var(--dim)}
+
+/* ━━ OLLAMA STATUS ━━ */
+.ollama-box{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:13px;line-height:1.7}
+.ollama-box.ok{border-color:rgba(34,197,94,.25)}
+.ollama-box.err{border-color:rgba(239,68,68,.25)}
+
+/* ━━ ASK AI PAGE ━━ */
+.rag-layout{display:flex;flex-direction:column;height:100%;padding:24px 28px;gap:16px;max-width:800px;margin:0 auto;width:100%}
+.rag-input-area{display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+.rag-actions{display:flex;gap:8px;align-items:center}
+.rag-actions select{padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:inherit;font-size:12px;outline:none}
+.rag-actions select option{background:var(--surface)}
+.rag-hint{font-size:11px;color:var(--dim)}
+.chat-area{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+.msg-q{background:var(--gold-dim);border:1px solid rgba(232,161,54,.2);border-radius:12px;padding:14px;font-size:13px;line-height:1.6;align-self:flex-end;max-width:85%}
+.msg-a{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:90%;align-self:flex-start}
+.msg-a-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--success);margin-bottom:8px}
+.msg-a-text{font-size:13px;line-height:1.8;white-space:pre-wrap}
+.msg-ctx{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.msg-ctx-label{font-size:10px;font-weight:600;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+.ctx-tag{display:inline-block;font-size:10px;padding:3px 10px;border-radius:8px;margin:2px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);color:var(--blue);cursor:pointer;font-weight:500;transition:all .2s}
+.ctx-tag:hover{background:rgba(59,130,246,.15)}
+.ctx-expand{display:none;font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px;padding:10px;background:var(--bg);border-radius:8px}
+.thinking-msg{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);padding:12px}
+.spin{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.typing::after{content:'█';animation:blink 1s step-end infinite;color:var(--gold)}
+@keyframes blink{50%{opacity:0}}
+
+/* ━━ K SLIDER ━━ */
+input[type=range]{accent-color:var(--gold);background:transparent;border:none;padding:0;width:80px}
+
+/* ━━ TOOLTIP ━━ */
+#tip{position:fixed;display:none;background:var(--surface);border:1px solid var(--border-light);border-radius:10px;padding:10px 14px;font-size:12px;pointer-events:none;max-width:250px;z-index:999;line-height:1.5;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+
+/* ━━ SCROLLBAR ━━ */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--border-light)}
+::selection{background:rgba(232,161,54,.3);color:#fff}
+
+/* ━━ RESPONSIVE ━━ */
+@media(max-width:900px){
+  .search-content{flex-direction:column}
+  .side-col{width:100%}
+  .docs-layout{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ━━ TOP BAR ━━ -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">R</div>
+    <div class="logo-text">RAG<span>ify</span></div>
+  </div>
+  <div class="topbar-right">
+    <span class="pill pill-info" id="ollamaBadge">OLLAMA…</span>
+    <span id="statsLabel">loading…</span>
+  </div>
+</div>
+
+<!-- ━━ NAV ━━ -->
+<div class="nav">
+  <button class="nav-btn active" onclick="switchTab('search')">⚡ Search</button>
+  <button class="nav-btn" onclick="switchTab('docs')">📄 Documents</button>
+  <button class="nav-btn" onclick="switchTab('rag')">🤖 Ask AI</button>
+</div>
+
+<!-- ━━ MAIN CONTENT ━━ -->
+<div class="main">
+
+  <!-- PAGE: SEARCH -->
+  <div class="page active" id="tab-search">
+    <div class="search-bar">
+      <div class="search-input-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input class="search-input" id="qInput" type="text" placeholder="Search for concepts… binary tree, sushi, basketball" />
+      </div>
+      <div class="algo-pills">
+        <button class="ap on" data-algo="hnsw" onclick="setAlgo(this)">HNSW</button>
+        <button class="ap" data-algo="kdtree" onclick="setAlgo(this)">KD-Tree</button>
+        <button class="ap" data-algo="bruteforce" onclick="setAlgo(this)">Brute</button>
+      </div>
+      <div class="ctrl-group">
+        <select class="ctrl-select" id="metric">
+          <option value="cosine">Cosine</option>
+          <option value="euclidean">Euclidean</option>
+          <option value="manhattan">Manhattan</option>
+        </select>
+        <span class="ctrl-label">K=<span id="kLabel">5</span></span>
+        <input type="range" id="kSlider" min="1" max="10" value="5" oninput="document.getElementById('kLabel').textContent=this.value">
+      </div>
+      <button class="search-btn" onclick="runSearch()">Search</button>
+    </div>
+    <div class="search-content">
+      <div class="plot-card"><canvas id="scatter"></canvas></div>
+      <div class="side-col">
+        <!-- Latency -->
+        <div class="card">
+          <div class="card-title">Search Latency</div>
+          <div class="lat-value" id="latBig">—</div>
+          <div class="lat-detail" id="latSub">Run a search to measure</div>
+        </div>
+        <!-- Results -->
+        <div class="card" style="flex:1;min-height:0;overflow-y:auto">
+          <div class="card-title">Top Matches</div>
+          <div class="r-list" id="results">
+            <div style="color:var(--muted);font-size:13px">Type a concept and search…</div>
+          </div>
+        </div>
+        <!-- Vector chart -->
+        <div class="card">
+          <div class="card-title">Query Embedding (16D)</div>
+          <canvas id="vecCvs" height="60"></canvas>
+        </div>
+        <!-- Benchmark -->
+        <div class="card" id="benchSec" style="display:none">
+          <div class="card-title">Algorithm Comparison</div>
+          <div id="benchBars"></div>
+        </div>
+        <!-- Benchmark button -->
+        <div class="card">
+          <div class="card-title">Benchmark</div>
+          <button class="btn-outline" onclick="runBenchmark()">▶ Compare All Algorithms</button>
+        </div>
+        <!-- HNSW Layers -->
+        <div class="card">
+          <div class="card-title">HNSW Graph Layers</div>
+          <div id="layers"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+        </div>
+        <!-- Insert Demo Vector -->
+        <div class="card">
+          <div class="card-title">Insert Demo Vector</div>
+          <div class="insert-group">
+            <input type="text" id="addMeta" placeholder="Description…" />
+            <select id="addCat">
+              <option value="cs">CS / Algorithms</option>
+              <option value="math">Mathematics</option>
+              <option value="food">Food & Cooking</option>
+              <option value="sports">Sports & Games</option>
+            </select>
+            <button class="btn-outline" onclick="addVector()">+ Insert</button>
+          </div>
+        </div>
+        <!-- Legend -->
+        <div class="card">
+          <div class="card-title">Categories</div>
+          <div class="legend-grid">
+            <div class="leg-item"><div class="leg-dot" style="background:var(--cs)"></div>CS / Algorithms</div>
+            <div class="leg-item"><div class="leg-dot" style="background:var(--math)"></div>Mathematics</div>
+            <div class="leg-item"><div class="leg-dot" style="background:var(--food)"></div>Food & Cooking</div>
+            <div class="leg-item"><div class="leg-dot" style="background:var(--sports)"></div>Sports & Games</div>
+            <div class="leg-item"><div class="leg-dot" style="background:var(--doc)"></div>Documents</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: DOCUMENTS -->
+  <div class="page" id="tab-docs">
+    <div class="docs-layout">
+      <div class="docs-col">
+        <div class="card">
+          <div class="card-title">Ollama Status</div>
+          <div class="ollama-box" id="ollamaStatus">Checking…</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Insert Document</div>
+          <div class="insert-group">
+            <input type="text" id="docTitle" placeholder="Document title or topic…" />
+            <textarea id="docText" placeholder="Paste your notes, textbook excerpt, lecture content…&#10;&#10;Long text is automatically chunked and each piece gets a real 768D embedding via Ollama."></textarea>
+            <button class="btn-gold" id="insertDocBtn" onclick="insertDocument()">⚡ Embed & Insert</button>
+            <div class="status-text" id="insertStatus"></div>
+          </div>
+        </div>
+      </div>
+      <div class="docs-col" style="overflow-y:auto">
+        <div class="card" style="flex:1">
+          <div class="card-title">Stored Documents (<span id="docCountLabel">0</span>)</div>
+          <div class="r-list" id="docList">
+            <div style="color:var(--muted);font-size:13px">No documents yet. Insert some on the left.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: ASK AI -->
+  <div class="page" id="tab-rag">
+    <div class="rag-layout">
+      <div class="rag-input-area">
+        <div class="card" style="padding:16px">
+          <textarea id="ragQuestion" rows="3" placeholder="Ask a question about your documents…&#10;e.g. What is dynamic programming?&#10;How does the recipe work?"></textarea>
+          <div class="rag-actions" style="margin-top:10px">
+            <select id="ragK">
+              <option value="2">Top 2 chunks</option>
+              <option value="3" selected>Top 3 chunks</option>
+              <option value="5">Top 5 chunks</option>
+            </select>
+            <button class="btn-gold" id="askBtn" onclick="askAI()" style="flex:1">🤖 Ask AI</button>
+          </div>
+          <div class="rag-hint" style="margin-top:8px">Uses your inserted documents as context. Answers come from the local LLM (llama3.2).</div>
+        </div>
+      </div>
+      <div class="chat-area" id="chatHistory">
+        <div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0">Insert documents first, then ask questions about them here.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end main -->
+
+<div id="tip"></div>
+
+<script>
+// ════════════════════════════════════════════════════
+//  CONSTANTS
+// ════════════════════════════════════════════════════
+const API  = 'http://localhost:8080';
+const DIMS = 16;
+const COL  = {cs:'#06b6d4',math:'#a78bfa',food:'#f97316',sports:'#22c55e',doc:'#fb7185',default:'#94a3b8'};
+const DIM_COL = ['#06b6d4','#06b6d4','#06b6d4','#06b6d4','#a78bfa','#a78bfa','#a78bfa','#a78bfa',
+                 '#f97316','#f97316','#f97316','#f97316','#22c55e','#22c55e','#22c55e','#22c55e'];
+
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+let allItems=[],pcaPoints=[],hitIds=new Set(),queryPt=null;
+let hoverItem=null,pulse=0,selAlgo='hnsw',searchResults=[];
+
+// ════════════════════════════════════════════════════
+//  TABS
+// ════════════════════════════════════════════════════
+function switchTab(name){
+  document.querySelectorAll('.nav-btn').forEach((b,i)=>{
+    const names=['search','docs','rag'];
+    b.classList.toggle('active',names[i]===name);
+  });
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='docs')loadDocList();
+  if(name==='search'){setTimeout(()=>{resize();},50);}
+}
+
+// ════════════════════════════════════════════════════
+//  TEXT → 16D EMBEDDING (demo)
+// ════════════════════════════════════════════════════
+const KW={
+  cs:['algorithm','data','tree','graph','array','linked','hash','stack','queue','sort','binary','dynamic','programming','recursion','complexity','pointer','node','search','insert','bfs','dfs','heap','trie'],
+  math:['calculus','matrix','probability','theorem','integral','derivative','linear','algebra','equation','function','prime','modular','combinatorics','permutation','eigenvalue','statistics','proof'],
+  food:['food','pizza','sushi','ramen','pasta','recipe','cook','eat','restaurant','dish','ingredient','flavor','spice','noodle','bread','croissant','taco','fish','rice','soup'],
+  sports:['sport','basketball','football','tennis','chess','swim','game','play','score','team','athlete','competition','match','tournament','olympic','dribble','tackle','serve']
+};
+function textToEmbedding(text){
+  const t=text.toLowerCase(),ws=t.split(/\s+/);
+  const s={cs:0,math:0,food:0,sports:0};
+  for(const w of ws)for(const[cat,kws]of Object.entries(KW))for(const kw of kws)if(w.includes(kw)||kw.startsWith(w)){s[cat]+=0.35;break;}
+  const mx=Math.max(...Object.values(s),0.01);
+  const n=v=>Math.min(v/mx*0.88,0.94);
+  const jitter=()=>(Math.random()-.5)*.04;
+  const emb=new Array(16).fill(0.08);
+  const fill=(i,score)=>{if(score<.01)return;const b=n(score);emb[i]=Math.max(.05,b+jitter());emb[i+1]=Math.max(.05,b+jitter());emb[i+2]=Math.max(.05,b*.92+jitter());emb[i+3]=Math.max(.05,b*.87+jitter());};
+  fill(0,s.cs);fill(4,s.math);fill(8,s.food);fill(12,s.sports);
+  return emb;
+}
+
+// ════════════════════════════════════════════════════
+//  PCA
+// ════════════════════════════════════════════════════
+function pca2D(embs){
+  const n=embs.length,d=embs[0].length;
+  if(n<2)return embs.map(()=>[0,0]);
+  const mean=new Array(d).fill(0);
+  for(const e of embs)for(let i=0;i<d;i++)mean[i]+=e[i]/n;
+  const X=embs.map(e=>e.map((v,i)=>v-mean[i]));
+  function powerIter(X,excl){
+    let v=new Array(d).fill(0).map(()=>Math.random()-.5);
+    if(excl){let dot=v.reduce((s,vi,i)=>s+vi*excl[i],0);v=v.map((vi,i)=>vi-dot*excl[i]);}
+    let nrm=Math.sqrt(v.reduce((s,vi)=>s+vi*vi,0));v=v.map(vi=>vi/nrm);
+    for(let it=0;it<200;it++){
+      const Xv=X.map(xi=>xi.reduce((s,xij,j)=>s+xij*v[j],0));
+      const nv=new Array(d).fill(0);
+      for(let k=0;k<n;k++)for(let j=0;j<d;j++)nv[j]+=X[k][j]*Xv[k];
+      if(excl){let dot=nv.reduce((s,vi,i)=>s+vi*excl[i],0);for(let i=0;i<d;i++)nv[i]-=dot*excl[i];}
+      nrm=Math.sqrt(nv.reduce((s,vi)=>s+vi*vi,0));
+      if(nrm<1e-10)break;
+      const prev=v.slice();v=nv.map(vi=>vi/nrm);
+      if(v.reduce((s,vi,i)=>s+(vi-prev[i])**2,0)<1e-12)break;
+    }
+    return v;
+  }
+  const pc1=powerIter(X,null),pc2=powerIter(X,pc1);
+  return X.map(x=>[x.reduce((s,v,i)=>s+v*pc1[i],0),x.reduce((s,v,i)=>s+v*pc2[i],0)]);
+}
+
+// ════════════════════════════════════════════════════
+//  SCATTER PLOT
+// ════════════════════════════════════════════════════
+const sc=document.getElementById('scatter'),ctx=sc.getContext('2d');
+let bounds={minX:-1,maxX:1,minY:-1,maxY:1};
+function resize(){const r=sc.parentElement.getBoundingClientRect();sc.width=r.width;sc.height=r.height;}
+window.addEventListener('resize',resize);
+
+function w2c(wx,wy){
+  const P=60,W=sc.width,H=sc.height,rx=bounds.maxX-bounds.minX||1,ry=bounds.maxY-bounds.minY||1;
+  return[P+((wx-bounds.minX)/rx)*(W-2*P),H-P-((wy-bounds.minY)/ry)*(H-2*P)];
+}
+
+function drawFrame(){
+  ctx.clearRect(0,0,sc.width,sc.height);
+  ctx.fillStyle='#0b0e14';ctx.fillRect(0,0,sc.width,sc.height);
+  // Grid
+  ctx.strokeStyle='#151b28';ctx.lineWidth=1;
+  for(let i=0;i<=8;i++){
+    const tx=60+(i/8)*(sc.width-120),ty=60+(i/8)*(sc.height-120);
+    ctx.beginPath();ctx.moveTo(tx,60);ctx.lineTo(tx,sc.height-60);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(60,ty);ctx.lineTo(sc.width-60,ty);ctx.stroke();
+  }
+  // Labels
+  ctx.fillStyle='#1e2533';ctx.font='500 11px Inter,sans-serif';
+  ctx.fillText('PC₁ →',sc.width/2-24,sc.height-16);
+  ctx.save();ctx.translate(16,sc.height/2+30);ctx.rotate(-Math.PI/2);ctx.fillText('PC₂ →',0,0);ctx.restore();
+  ctx.fillStyle='#1e2533';ctx.font='500 12px Inter,sans-serif';
+  ctx.fillText('Semantic Space · PCA Projection',70,24);
+  // Lines from query to hits
+  if(queryPt&&hitIds.size>0){
+    const[qx,qy]=w2c(queryPt.x,queryPt.y);
+    for(const pt of pcaPoints){
+      if(!hitIds.has(pt.item.id))continue;
+      const[px,py]=w2c(pt.x,pt.y);
+      ctx.strokeStyle='rgba(232,161,54,0.15)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+      ctx.beginPath();ctx.moveTo(qx,qy);ctx.lineTo(px,py);ctx.stroke();ctx.setLineDash([]);
+    }
+  }
+  // Points
+  for(const pt of pcaPoints){
+    const[cx,cy]=w2c(pt.x,pt.y);
+    const col=COL[pt.item.category]||COL.default;
+    const isHit=hitIds.has(pt.item.id),r=isHit?9:6;
+    if(isHit){
+      const pr=r+6+Math.sin(pulse)*3;
+      ctx.beginPath();ctx.arc(cx,cy,pr,0,2*Math.PI);
+      ctx.strokeStyle=col+'66';ctx.lineWidth=1.5;ctx.stroke();
+    }
+    const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,r*2.5);
+    grd.addColorStop(0,col+(isHit?'99':'55'));grd.addColorStop(1,'transparent');
+    ctx.beginPath();ctx.arc(cx,cy,r*2.5,0,2*Math.PI);ctx.fillStyle=grd;ctx.fill();
+    ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.fillStyle=col;ctx.fill();
+    if(hoverItem&&hoverItem.id===pt.item.id){
+      ctx.beginPath();ctx.arc(cx,cy,r+4,0,2*Math.PI);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();
+    }
+  }
+  // Query star
+  if(queryPt){
+    const[qx,qy]=w2c(queryPt.x,queryPt.y);
+    ctx.save();ctx.translate(qx,qy);
+    ctx.shadowColor='#e8a136';ctx.shadowBlur=16;
+    ctx.beginPath();
+    for(let i=0;i<10;i++){const a=(i*Math.PI/5)-Math.PI/2,rr=i%2===0?12:5;if(i===0)ctx.moveTo(Math.cos(a)*rr,Math.sin(a)*rr);else ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}
+    ctx.closePath();ctx.fillStyle='#e8a136';ctx.fill();
+    ctx.shadowBlur=0;ctx.restore();
+    ctx.fillStyle='#94a3b8';ctx.font='500 10px Inter,sans-serif';ctx.fillText('query',qx+16,qy+4);
+  }
+  // Empty state
+  if(!pcaPoints.length){
+    ctx.fillStyle='#1e2533';ctx.font='500 14px Inter,sans-serif';ctx.textAlign='center';
+    ctx.fillText('Connecting to VectorDB…',sc.width/2,sc.height/2);ctx.textAlign='left';
+  }
+  pulse+=0.05;
+  requestAnimationFrame(drawFrame);
+}
+
+sc.addEventListener('mousemove',e=>{
+  const rect=sc.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  hoverItem=null;let best=18;
+  for(const pt of pcaPoints){const[cx,cy]=w2c(pt.x,pt.y),d=Math.hypot(mx-cx,my-cy);if(d<best){best=d;hoverItem=pt.item;}}
+  const tip=document.getElementById('tip');
+  if(hoverItem){
+    const col=COL[hoverItem.category]||COL.default;
+    tip.style.display='block';tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY-8)+'px';
+    tip.innerHTML=`<span style="color:${col};font-weight:600">${hoverItem.category.toUpperCase()}</span><br><span style="color:#e2e8f0">${hoverItem.metadata}</span>`;
+  }else tip.style.display='none';
+});
+sc.addEventListener('mouseleave',()=>{hoverItem=null;document.getElementById('tip').style.display='none';});
+
+// ════════════════════════════════════════════════════
+//  LOAD ITEMS
+// ════════════════════════════════════════════════════
+async function loadItems(){
+  try{
+    const r=await fetch(API+'/items');allItems=await r.json();
+    if(allItems.length>=2){
+      const coords=pca2D(allItems.map(v=>v.embedding));
+      pcaPoints=allItems.map((item,i)=>({x:coords[i][0],y:coords[i][1],item}));
+      let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+      for(const p of pcaPoints){x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);y0=Math.min(y0,p.y);y1=Math.max(y1,p.y);}
+      const px=(x1-x0)*.18||.1,py=(y1-y0)*.18||.1;
+      bounds={minX:x0-px,maxX:x1+px,minY:y0-py,maxY:y1+py};
+    }
+    document.getElementById('statsLabel').textContent=allItems.length+' vectors · '+DIMS+'D';
+  }catch(_){}
+}
+
+// ════════════════════════════════════════════════════
+//  SEARCH
+// ════════════════════════════════════════════════════
+function setAlgo(el){
+  document.querySelectorAll('.ap').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');selAlgo=el.dataset.algo;
+}
+
+async function runSearch(){
+  const text=document.getElementById('qInput').value.trim();if(!text)return;
+  const emb=textToEmbedding(text),k=parseInt(document.getElementById('kSlider').value);
+  const metric=document.getElementById('metric').value;
+  try{
+    const r=await fetch(`${API}/search?v=${emb.join(',')}&k=${k}&metric=${metric}&algo=${selAlgo}`);
+    const data=await r.json();
+    searchResults=data.results||[];hitIds=new Set(searchResults.map(r=>r.id));
+    const us=data.latencyUs||0;
+    document.getElementById('latBig').textContent=us<1000?us+' μs':(us/1000).toFixed(2)+' ms';
+    document.getElementById('latSub').textContent=selAlgo.toUpperCase()+' · '+metric+' · k='+k;
+    if(searchResults.length>0){
+      let sx=0,sy=0,sw=0;
+      for(let i=0;i<Math.min(3,searchResults.length);i++){
+        const pt=pcaPoints.find(p=>p.item.id===searchResults[i].id);
+        if(pt){const w=1/(i+1);sx+=pt.x*w;sy+=pt.y*w;sw+=w;}
+      }
+      if(sw>0)queryPt={x:sx/sw+(Math.random()-.5)*.015,y:sy/sw+(Math.random()-.5)*.015};
+    }
+    renderResults(searchResults);drawVecChart(emb);
+  }catch(_){alert('Cannot reach server — is it running on :8080?');}
+}
+document.getElementById('qInput').addEventListener('keydown',e=>{if(e.key==='Enter')runSearch();});
+
+function renderResults(results){
+  if(!results||!results.length){document.getElementById('results').innerHTML='<div style="color:var(--muted);font-size:13px">No results</div>';return;}
+  document.getElementById('results').innerHTML=results.map((r,i)=>{
+    const col=COL[r.category]||COL.default;
+    return `<div class="r-item" onmouseenter="hoverItem={id:${r.id}}" onmouseleave="hoverItem=null">
+      <div class="r-head"><span class="r-rank">#${i+1}</span><span class="r-dist">${r.distance.toFixed(5)}</span></div>
+      <div class="r-meta">${r.metadata}</div>
+      <div class="r-foot">
+        <span class="r-tag" style="background:${col}15;color:${col};border:1px solid ${col}33">${r.category.toUpperCase()}</span>
+        <button class="r-del" onclick="deleteItem(${r.id})">✕ Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function drawVecChart(emb){
+  const vc=document.getElementById('vecCvs'),W=vc.parentElement.clientWidth-36;
+  vc.width=W;const vx=vc.getContext('2d');
+  vx.clearRect(0,0,W,60);
+  const bw=(W-4)/DIMS;
+  for(let i=0;i<DIMS;i++){
+    const h=emb[i]*46,x=2+i*bw,col=DIM_COL[i];
+    vx.fillStyle=col+'88';vx.fillRect(x+1,50-h,bw-2,h);
+  }
+  vx.font='500 7px Inter,sans-serif';vx.textAlign='center';
+  [['CS',0],['MATH',4],['FOOD',8],['SPORT',12]].forEach(([lbl,gi])=>{
+    const col=DIM_COL[gi*1];
+    vx.fillStyle=col+'66';vx.fillText(lbl,2+(gi+1.5)*bw,58);
+  });
+  vx.textAlign='left';
+}
+
+async function runBenchmark(){
+  const text=document.getElementById('qInput').value.trim()||'binary tree algorithm';
+  const emb=textToEmbedding(text),metric=document.getElementById('metric').value;
+  try{
+    const r=await fetch(`${API}/benchmark?v=${emb.join(',')}&k=5&metric=${metric}`);
+    const d=await r.json();
+    document.getElementById('benchSec').style.display='block';
+    const mx=Math.max(d.bruteforceUs,d.kdtreeUs,d.hnswUs,1);
+    document.getElementById('benchBars').innerHTML=[
+      {lbl:'Brute Force',us:d.bruteforceUs,col:'#ef4444'},
+      {lbl:'KD-Tree',us:d.kdtreeUs,col:'#3b82f6'},
+      {lbl:'HNSW',us:d.hnswUs,col:'#e8a136'},
+    ].map(({lbl,us,col})=>{
+      const pct=Math.max((us/mx)*100,3),disp=us<1000?us+' μs':(us/1000).toFixed(2)+' ms';
+      return `<div class="bench-row"><div class="bench-label"><span style="color:${col}">${lbl}</span><span style="color:var(--muted)">${disp}</span></div><div class="bench-track"><div class="bench-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
+    }).join('');
+  }catch(_){}
+}
+
+async function loadHNSW(){
+  try{
+    const r=await fetch(API+'/hnsw-info'),d=await r.json();
+    const maxN=d.nodesPerLayer[0]||1;
+    document.getElementById('layers').innerHTML=d.nodesPerLayer.map((cnt,lyr)=>{
+      const pct=Math.max((cnt/maxN)*100,2),edg=d.edgesPerLayer[lyr]||0;
+      return `<div class="layer-row"><div class="layer-num">L${lyr}</div><div class="layer-track"><div class="layer-fill" style="width:${pct}%"></div></div><div class="layer-info">${cnt}n · ${edg}e</div></div>`;
+    }).join('')||'<span style="color:var(--muted);font-size:12px">Empty</span>';
+  }catch(_){}
+}
+
+async function addVector(){
+  const meta=document.getElementById('addMeta').value.trim(),cat=document.getElementById('addCat').value;
+  if(!meta)return;
+  const emb=textToEmbedding(meta+' '+cat);
+  try{
+    await fetch(API+'/insert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({metadata:meta,category:cat,embedding:emb})});
+    document.getElementById('addMeta').value='';
+    await loadItems();loadHNSW();
+  }catch(_){}
+}
+
+async function deleteItem(id){
+  try{
+    await fetch(`${API}/delete/${id}`,{method:'DELETE'});
+    searchResults=searchResults.filter(r=>r.id!==id);hitIds.delete(id);
+    renderResults(searchResults);await loadItems();loadHNSW();
+  }catch(_){}
+}
+
+// ════════════════════════════════════════════════════
+//  DOCUMENTS
+// ════════════════════════════════════════════════════
+async function checkOllamaStatus(){
+  try{
+    const r=await fetch(API+'/status'),d=await r.json();
+    const badge=document.getElementById('ollamaBadge');
+    const box=document.getElementById('ollamaStatus');
+    if(d.ollamaAvailable){
+      badge.className='pill pill-ok';badge.textContent='OLLAMA ✓';
+      box.className='ollama-box ok';
+      box.innerHTML=`<span style="color:var(--success)">● Online</span><br>`+
+        `Embed: <strong style="color:var(--text)">${d.embedModel}</strong><br>`+
+        `Generate: <strong style="color:var(--text)">${d.genModel}</strong><br>`+
+        `Dims: <span style="color:var(--muted)">${d.docDims||'(set on first insert)'}</span><br>`+
+        `Documents: <strong style="color:var(--text)">${d.docCount}</strong>`;
+    }else{
+      badge.className='pill pill-err';badge.textContent='OLLAMA ✗';
+      box.className='ollama-box err';
+      box.innerHTML=`<span style="color:var(--danger)">● Offline</span><br><br>`+
+        `To enable RAG features:<br>`+
+        `<span style="color:var(--muted)">1. Install from ollama.com<br>`+
+        `2. ollama pull nomic-embed-text<br>`+
+        `3. ollama pull llama3.2</span>`;
+    }
+  }catch(_){}
+}
+
+async function insertDocument(){
+  const title=document.getElementById('docTitle').value.trim();
+  const text=document.getElementById('docText').value.trim();
+  const btn=document.getElementById('insertDocBtn');
+  const status=document.getElementById('insertStatus');
+  if(!title||!text){status.textContent='⚠ Need both a title and text.';return;}
+  btn.disabled=true;btn.textContent='Embedding…';
+  status.innerHTML='<span style="color:var(--muted)">Calling Ollama nomic-embed-text…</span>';
+  try{
+    const r=await fetch(API+'/doc/insert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text})});
+    const d=await r.json();
+    if(d.error){
+      status.innerHTML=`<span style="color:var(--danger)">✗ ${d.error}</span>`;
+    }else{
+      status.innerHTML=`<span style="color:var(--success)">✓ Inserted ${d.chunks} chunk(s) · ${d.dims}D embeddings</span>`;
+      document.getElementById('docTitle').value='';document.getElementById('docText').value='';
+      const emb16=textToEmbedding(title+' '+text);
+      fetch(API+'/insert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({metadata:title,category:'doc',embedding:emb16})}).then(()=>{loadItems().then(loadHNSW);});
+      loadDocList();checkOllamaStatus();
+    }
+  }catch(_){status.innerHTML='<span style="color:var(--danger)">✗ Server error</span>';}
+  btn.disabled=false;btn.textContent='⚡ Embed & Insert';
+}
+
+async function loadDocList(){
+  try{
+    const r=await fetch(API+'/doc/list'),docs=await r.json();
+    document.getElementById('docCountLabel').textContent=docs.length;
+    if(!docs.length){document.getElementById('docList').innerHTML='<div style="color:var(--muted);font-size:13px">No documents yet.</div>';return;}
+    document.getElementById('docList').innerHTML=docs.map(d=>`
+      <div class="doc-item">
+        <div class="doc-title">${d.title}</div>
+        <div class="doc-preview">${d.preview}</div>
+        <div class="doc-foot">
+          <span class="doc-words">${d.words} words</span>
+          <button class="r-del" onclick="deleteDoc(${d.id})">✕</button>
+        </div>
+      </div>`).join('');
+  }catch(_){}
+}
+
+async function deleteDoc(id){
+  try{await fetch(`${API}/doc/delete/${id}`,{method:'DELETE'});loadDocList();checkOllamaStatus();}catch(_){}
+}
+
+// ════════════════════════════════════════════════════
+//  RAG — ASK AI
+// ════════════════════════════════════════════════════
+document.getElementById('ragQuestion').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.ctrlKey)askAI();});
+
+async function askAI(){
+  const question=document.getElementById('ragQuestion').value.trim();
+  if(!question)return;
+  const k=parseInt(document.getElementById('ragK').value);
+  const btn=document.getElementById('askBtn');
+  btn.disabled=true;btn.textContent='Thinking…';
+  const history=document.getElementById('chatHistory');
+  history.innerHTML='';
+  const qDiv=document.createElement('div');qDiv.className='msg-q';
+  qDiv.textContent=question;history.appendChild(qDiv);
+  const thinkDiv=document.createElement('div');thinkDiv.className='thinking-msg';
+  thinkDiv.innerHTML='<div class="spin"></div>Retrieving context & generating answer…';
+  history.appendChild(thinkDiv);history.scrollTop=history.scrollHeight;
+
+  // Visual: update scatter plot
+  fetch(API+'/doc/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,k})})
+  .then(res=>res.json()).then(data=>{
+    if(data.contexts&&data.contexts.length>0){
+      hitIds=new Set();let sx=0,sy=0,sw=0;
+      data.contexts.forEach((ctx,i)=>{
+        const pt=pcaPoints.find(p=>p.item.category==='doc'&&ctx.title.startsWith(p.item.metadata));
+        if(pt){hitIds.add(pt.item.id);const w=1/(i+1);sx+=pt.x*w;sy+=pt.y*w;sw+=w;}
+      });
+      if(sw>0)queryPt={x:sx/sw+(Math.random()-.5)*.015,y:sy/sw+(Math.random()-.5)*.015};
+    }else{
+      hitIds=new Set();
+      const emb16=textToEmbedding(question);
+      fetch(`${API}/search?v=${emb16.join(',')}&k=3&metric=cosine&algo=hnsw`)
+      .then(r2=>r2.json()).then(d2=>{
+        if(d2.results&&d2.results.length>0){
+          let sx=0,sy=0,sw=0;
+          for(let i=0;i<Math.min(3,d2.results.length);i++){
+            const pt=pcaPoints.find(p=>p.item.id===d2.results[i].id);
+            if(pt){const w=1/(i+1);sx+=pt.x*w;sy+=pt.y*w;sw+=w;}
+          }
+          if(sw>0)queryPt={x:sx/sw+(Math.random()-.5)*.015,y:sy/sw+(Math.random()-.5)*.015};
+        }
+      }).catch(()=>{});
+    }
+  }).catch(()=>{});
+
+  try{
+    const r=await fetch(API+'/doc/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,k})});
+    const d=await r.json();
+    history.removeChild(thinkDiv);
+    if(d.error){
+      const errDiv=document.createElement('div');errDiv.className='msg-a';
+      errDiv.innerHTML=`<div class="msg-a-label">ERROR</div><div class="msg-a-text" style="color:var(--danger)">${d.error}</div>`;
+      history.appendChild(errDiv);
+    }else{
+      const aDiv=document.createElement('div');aDiv.className='msg-a';
+      let ctxHTML='';
+      if(d.contexts&&d.contexts.length){
+        ctxHTML=`<div class="msg-ctx"><div class="msg-ctx-label">RETRIEVED CHUNKS</div>`;
+        d.contexts.forEach((c,i)=>{
+          const eid='ctx-'+Date.now()+'-'+i;
+          ctxHTML+=`<span class="ctx-tag" onclick="document.getElementById('${eid}').style.display=document.getElementById('${eid}').style.display==='block'?'none':'block'">${c.title} (${c.distance.toFixed(3)})</span>`;
+          ctxHTML+=`<div class="ctx-expand" id="${eid}">${c.text}</div>`;
+        });
+        ctxHTML+=`</div>`;
+      }
+      aDiv.innerHTML=`<div class="msg-a-label">AI RESPONSE · ${d.model||'llama3.2'}</div><div class="msg-a-text">${d.answer}</div>${ctxHTML}`;
+      history.appendChild(aDiv);
+    }
+    history.scrollTop=history.scrollHeight;
+  }catch(_){
+    history.removeChild(thinkDiv);
+    const errDiv=document.createElement('div');errDiv.className='msg-a';
+    errDiv.innerHTML='<div class="msg-a-text" style="color:var(--danger)">Failed to reach server.</div>';
+    history.appendChild(errDiv);
+  }
+  btn.disabled=false;btn.textContent='🤖 Ask AI';
+}
+
+// ════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════
+resize();drawFrame();
+loadItems().then(loadHNSW);
+checkOllamaStatus();
+</script>
+</body>
+</html>
